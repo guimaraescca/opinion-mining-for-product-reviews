@@ -1,15 +1,18 @@
 # Standart libraries
-import string
+import re
 
 # Third-party libraries
-import LIWCtools.LIWCtools as lt
-import nltk             # word_tokenize()
+import nltk
+# nltk.download('punkt') # Download data for the tokenization process
 
-# Download data for the tokenization process
-# nltk.download('punkt')
+
+# Global data structures
+posemo_set = set()          # Set of positive sentiment words
+negemo_set = set()          # Set of negative sentiment words
 
 aspect_pos = dict()         # Dictionary of aspects position
 aspect_polarity = dict()    # Dictionary of aspects polarity
+
 
 # Context words for polarity change
 negation = ['jamais', 'nada', 'nem', 'nenhum', 'ninguém', 'nunca', 'não',
@@ -20,23 +23,25 @@ amplifier = ['mais', 'muito', 'demais', 'completamente', 'absolutamente',
 downtoner = ['pouco', 'quase', 'menos', 'apenas']
 
 
-def pre_processing(document):
-    """Tokenize and eliminate punctuation for a given document"""
+def pre_processing(document, remove_punctuation=False):
+    """
+    Convert words to lower case, tokenize document into a list of words for each
+    sentence.
+    """
 
     # Convert to lower case
     document = document.lower()
 
-    # Tokenize the document
-    document_tokens = nltk.word_tokenize(document)
+    # Tokenize document in sentences using Punkt for BP (Brazilian Portuguese)
+    stok = nltk.data.load('tokenizers/punkt/portuguese.pickle')
+    document_sentences = stok.tokenize(document)
 
-    # Remove punctuation - i.e. !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
-    document_words = []
-    for word in document_tokens:
+    # Tokenize sentences in words
+    document_data = []
+    for sentence in document_sentences:
+        document_data.append(nltk.word_tokenize(sentence))
 
-        if word not in string.punctuation:
-            document_words.append(word)
-
-    return(document_words)
+    return(document_data)
 
 
 def search_ontology(ontology, word):
@@ -47,60 +52,102 @@ def search_ontology(ontology, word):
     return False
 
 
-def search_liwc(LIWCDict, word):
-    """Search a LIWC dictionary for the occurrence of a sentiment word"""
+def init_sets(liwc):
+    """
+    Search on LIWC for words in the positive and negative emotions categories
+    and group them in the respective set.
+    """
 
-    # Query the LIWC for the respective classes
-    classes_found = LIWCDict.LDictCountString(word)
+    # Iterate across the LIWC data
+    for line in liwc:
+        line_words = line.rstrip('\r\n').split()
+        word = line_words[0]
+        categories = line_words[1:]
+
+        # Add word to it's corresponding emotion set
+        if '126' in categories:
+            posemo_set.add(word)
+        elif '127' in categories:
+            negemo_set.add(word)
+
+
+def search_sets(word):
+    """Search sentiment sets for the occurrence of a sentiment word."""
 
     # Check for positive or negative emotions
-    for cl in classes_found:
-        if cl == 'posemo':
-            return(1)
-        elif cl == 'negemo':
-            return(-1)
+    if search_regex(word, posemo_set):
+        return(1)
+    elif search_regex(word, negemo_set):
+        return(-1)
 
     # No class correspond to a sentiment word
-    return(False)
+    else:
+        return(False)
 
 
-def word_tagger(LIWCDict, ontology, review, flag_print=False):
+def search_regex(word, sentiment_set):
+    """Search using a regex for the occurrence of 'word' in the sentiment set"""
+
+    # Concatenate word with regex
+    pattern = r'^' + re.escape(word) + r'[*]?\b'
+
+    # Look for the pattern on the sets
+    for sent_word in sentiment_set:
+        match = re.search(fr'{pattern}', sent_word)
+        if match:
+            return True
+
+    return False
+
+
+def word_tagger(ontology, review):
     """
-        Identify aspects, sentiment and context changing words for a given
-    document.
+    Identify aspects, sentiment and context changing words for a given document.
     """
 
     document_markup = []
 
-    for pos, word in enumerate(review):
+    for sentence in review:
+        sentence_markup = []
 
-        # Check if word is an aspect
-        asp_check = search_ontology(ontology, word)
+        for pos, word in enumerate(sentence):
 
-        # If the search return a valid position
-        if asp_check is True:
-            if flag_print is True:
-                print(f'Aspect:\t\t {word}')
+            # Check if word is context changing one (negation, amplifier or downtoner)
+            if word in negation:
+                sentence_markup.append('negation')
 
-            aspect_pos[pos] = word
-            document_markup.append(0)
-            pos += 1
+            elif word in amplifier:
+                sentence_markup.append('amplifier')
 
-        # Check if word is a sentiment word
-        else:
-            polarity = search_liwc(LIWCDict, word)
+            elif word in downtoner:
+                sentence_markup.append('downtoner')
 
-            # Current word is not a sentiment word
-            if polarity is False:
-                document_markup.append(0)
-                pos += 1
-
-            # Attribute the respective polarity value to the position
             else:
-                if flag_print is True:
-                    print(f'Sent. word:\t {word} (pol={polarity})')
-                document_markup.append(polarity)
-                pos += 1
+
+                # Search on the ontology for a matching aspect
+                asp_check = search_ontology(ontology, word)
+
+                # Check if word is an aspect
+                if asp_check is True:
+                    aspect_pos[pos] = word              # Mark the aspect position
+                    sentence_markup.append('aspect')
+
+                # Check if word is a sentiment word
+                else:
+
+                    # Search on LIWC for a polarity conotation
+                    polarity = search_sets(word)
+
+                    # Word is not a sentiment word
+                    if polarity is False:
+                        sentence_markup.append('')
+
+                    # Attribute polarity value to the position
+                    else:
+                        sentence_markup.append(polarity)
+
+        # Add the tagged sentence to the document list
+        document_markup.append(sentence_markup)
 
     return(document_markup)
 
@@ -143,35 +190,51 @@ def compute_polarities(document_markup, word_range=4):
             aspect_polarity[aspect] = polarity
 
 
+def print_review_data(document_data, document_markup):
+    """
+        Print word's tag for each sentence in review. Used for debbuging the
+    'word_tagger()' method.
+    '"""
+
+    for i, sentence in enumerate(document_data):
+        print(f'\nSentence [{i}]: \n{sentence}')
+        print(f'[ #] [Word]          [Tag]')
+        for j, word in enumerate(sentence):
+            print(f'[{j:{2}}] {word:{15}} {document_markup[i][j]}')
+
+
 def main():
 
     # Load the LIWC dictionary
     liwc_path = 'liwc_dictionaries/LIWC2007_Portugues_win.dic'
-    LIWCDict = lt.LDict(liwc_path, encoding='latin-1')
+    liwc_file = open(liwc_path, 'r', encoding='latin-1')
+    liwc = liwc_file.readlines()
 
-    # Load sentence tokenizer
-    stok = nltk.data.load('tokenizers/punkt/portuguese.pickle')
+    # Initialize sentiment sets
+    init_sets(liwc)
 
-    # Load data
+    # Load data corpus and ontology
     review = 'Ótimo celular, desempenho e design espetaculares, superou minhas expectativas. Outra coisa que se destaca bastante é a bateria, com uma grande duração. Os fones que acompanham o celular são provavelmente os melhores que eu já utilizei, com uma qualidade sonora e um isolamento fenomenais. A samsung realmente inovou neste celular.'
     ontology = ['celular', 'desempenho', 'design', 'bateria', 'fones']
 
     # Pre-process the reviews
-    print('\n[Pre-processing]')
-    review_words = pre_processing(review)
+    print('[Pre-processing]')
+    document_data = pre_processing(review)
 
-    print('>>> Review:\n\t', review)
-    print('>>> Tokenization:\n\t ', review_words)
+    print('\n>>> Review:\n', review)
+    print('\n>>> Tokenization of sentences and words:')
+    for i, sentence in enumerate(document_data):
+        print(f'[{i:{2}}] {sentence}')
 
-    # Start analysis
+    # Analysis
     print('\n[Parsing the review]')
-    document_markup = word_tagger(LIWCDict, ontology, review_words, False)
+    document_markup = word_tagger(ontology, document_data)
 
     # Create a dictionary fo polarties aspects
-    print('\n[Compute the polarities]')
-    compute_polarities(document_markup, 4)
+    # print('\n[Compute the polarities]')
+    # compute_polarities(document_markup, 4)
 
-    print(aspect_polarity)
+    print_review_data(document_data, document_markup)
 
 
 if __name__ == '__main__':
