@@ -1,3 +1,4 @@
+# Standart libraries
 import string
 
 # Third-party libraries
@@ -7,11 +8,6 @@ from rdflib.namespace import RDF, OWL
 
 # Download data for the tokenization process
 # nltk.download('punkt')
-
-# Global data structures
-aspect_pos = dict()         # Dictionary of aspects position
-aspect_polarity = dict()    # Dictionary of aspects polarity
-
 
 # Context words for polarity change
 negation = ['jamais', 'nada', 'nem', 'nenhum', 'ninguém', 'nunca', 'não',
@@ -122,129 +118,103 @@ class Ontology:
         return(None)
 
 
-def word_tagger(liwc, ontology, review):
+class Document:
     """
-    Identify aspects, sentiment and context changing words for a given document.
+    Attributes:
+    ----------
+    text:
+    words:
+    word_tag:
+
     """
 
-    document_markup = []
+    def __init__(self, text):
 
-    for pos, word in enumerate(review):
+        self.text = text
+        self.words = nltk.word_tokenize(text.lower())
+        self.word_tag = []
 
-        # Check if word is context changing one (negation, amplifier or downtoner)
-        if word in negation:
-            document_markup.append('negation')
-        elif word in amplifier:
-            document_markup.append('amplifier')
-        elif word in downtoner:
-            document_markup.append('downtoner')
+        self.aspect_pos = dict()
+        self.aspect_polarity = dict()
 
-        else:
-            # Search on the ontology for a matching aspect
-            asp_check = ontology.search(word)
+    def print_data(self):
+        """
+        Show on screen each document word and it's corresponding tag.
+        Used for debbuging the tagging method.
+        '"""
 
-            # Check if word is an aspect
-            if asp_check is not None:
-                aspect_pos[pos] = asp_check         # Mark the aspect position
-                document_markup.append('aspect')
+        print(f'[ #] [Word]          [Tag]')
+        for i, word in enumerate(self.words):
+            print(f'[{i:{2}}] {word:{15}} {self.word_tag[i]}')
 
-            # Check if word is a sentiment word
+    def tag_words(self, liwc, ontology):
+        """
+        Identify aspects, sentiment and context changing words for a given document.
+        """
+
+        for pos, word in enumerate(self.words):
+
+            # Check if word is context changing one (negation, amplifier or downtoner)
+            if word in negation:
+                self.word_tag.append('negation')
+            elif word in amplifier:
+                self.word_tag.append('amplifier')
+            elif word in downtoner:
+                self.word_tag.append('downtoner')
+
             else:
-                # Search on LIWC for a polarity conotation
-                polarity = liwc.get_sentiment(word)
+                # Search on the ontology for a matching aspect
+                asp_check = ontology.search(word)
 
-                # Word is not a sentiment word
-                if polarity is None:
-                    document_markup.append('')
+                # Check if word is an aspect
+                if asp_check is not None:
+                    self.aspect_pos[pos] = asp_check         # Mark the aspect position
+                    self.word_tag.append('aspect')
 
-                # Attribute polarity value to the position
+                # Check if word is a sentiment word
                 else:
-                    document_markup.append(polarity)
+                    # Search on LIWC for a polarity conotation
+                    polarity = liwc.get_sentiment(word)
 
-    return(document_markup)
+                    # Word is not a sentiment word
+                    if polarity is None:
+                        self.word_tag.append('')
 
+                    # Attribute polarity value to the position
+                    else:
+                        self.word_tag.append(polarity)
 
-def get_polarity_inrange(document_markup, pos, word_range):
-    """Sum the polarity values surrounding the aspect for the given position."""
+    def compute_sentence(self):
 
-    polarity = 0
-    end = len(document_markup) - 1
+        punctuation = list(string.punctuation)
 
-    # Set start and end positions to scan polarities in the review
-    start_pos = pos - word_range if pos >= word_range else 0
-    end_pos = pos + word_range if pos + word_range <= end else end
+        # For each aspect position, define the sentence range
+        for pos in self.aspect_pos.keys():
+            sentiment_pos = []
+            start = pos
+            end = pos
 
-    for i in range(start_pos, end_pos + 1):
-        polarity += document_markup[i]
+            # Set sentence start
+            while(start > 0 and self.words[start - 1] not in punctuation):
+                start -= 1
+                if self.word_tag[start] == -1 or self.word_tag[start] == 1:
+                    # print('start: ', self.words[start])
+                    sentiment_pos.append(start)
 
-    return(polarity)
+            # Set sentence end
+            while(end < len(self.words) - 1 and self.words[end + 1] not in punctuation):
+                end += 1
+                if self.word_tag[end] == -1 or self.word_tag[end] == 1:
+                    # print('end:', self.word_tag[end])
+                    sentiment_pos.append(end)
 
+            print(f'\nSentence for \'{self.aspect_pos.get(pos)}\': [{start},{end}]')
+            print(f'Sentiment words ({len(sentiment_pos)}):')
+            for s_pos in sentiment_pos:
+                print(f'\'{self.words[s_pos]}\' at {s_pos}')
 
-def compute_polarities(document_markup, word_range=4):
-    """"Compute the polarity values for each aspect identified in a review.
-
-    document_markup: list
-        List that mark up polarities and aspect for a given list of words from a review
-    word_range: int
-        Number of words to look for polarities around a found aspect.
-    """
-
-    # Compute the polarity value for each aspect
-    for pos, aspect in aspect_pos.items():
-        polarity = get_polarity_inrange(document_markup, pos, word_range)
-
-        # Check if the aspect had occur once
-        if aspect in aspect_polarity:
-            aspect_polarity[aspect] += polarity
-
-        # Otherwise just attribute the value to the aspect
-        else:
-            aspect_polarity[aspect] = polarity
-
-
-def print_review_data(review_data, document_markup):
-    """
-    Print word's tag for each sentence in review. Used for debbuging the
-    'word_tagger()' method.
-    '"""
-
-    print(f'[ #] [Word]          [Tag]')
-    for i, word in enumerate(review_data):
-        print(f'[{i:{2}}] {word:{15}} {document_markup[i]}')
-
-
-def compute_sentence(review_data, document_markup):
-
-    punctuation = list(string.punctuation)
-
-    # For each aspect position, define the sentence range
-    for pos in aspect_pos.keys():
-        sentiment_pos = []
-        start = pos
-        end = pos
-
-        # Set sentence start
-        while(start > 0 and review_data[start - 1] not in punctuation):
-            start -= 1
-            if document_markup[start] == -1 or document_markup[start] == 1:
-                # print('start: ', review_data[start])
-                sentiment_pos.append(start)
-
-        # Set sentence end
-        while(end < len(review_data) - 1 and review_data[end + 1] not in punctuation):
-            end += 1
-            if document_markup[end] == -1 or document_markup[end] == 1:
-                # print('end:', document_markup[end])
-                sentiment_pos.append(end)
-
-        print(f'\nSentence for \'{aspect_pos.get(pos)}\': [{start},{end}]')
-        print(f'Sentiment words ({len(sentiment_pos)}):')
-        for s_pos in sentiment_pos:
-            print(f'\'{review_data[s_pos]}\' at {s_pos}')
-
-        for s_pos in sentiment_pos:
-            polarity = document_markup[s_pos]
-
+            for s_pos in sentiment_pos:
+                polarity = self.word_tag[s_pos]
 
 
 def main():
@@ -256,27 +226,20 @@ def main():
     ontology = Ontology('ontologies/smartphone_aspects.owl')
 
     # Load corpus data
-    review = 'Ótimo celular, desempenho e design espetaculares, superou minhas expectativas. Outra coisa que se destaca bastante é a bateria, com uma grande duração. Os fones que acompanham o celular são provavelmente os melhores que eu já utilizei, com uma qualidade sonora e um isolamento fenomenais. A samsung realmente inovou neste celular'
+    text = 'Ótimo celular, desempenho e design espetaculares, superou minhas expectativas. Outra coisa que se destaca bastante é a bateria, com uma grande duração. Os fones que acompanham o celular são provavelmente os melhores que eu já utilizei, com uma qualidade sonora e um isolamento fenomenais. A samsung realmente inovou neste celular'
 
-    # Pre-process the reviews
-    print('[Pre-processing]')
-    review_data = nltk.word_tokenize(review.lower())
+    # Create an Document object to contain all info about the review
+    review = Document(text)
 
-    print('\n>>> Review:\n', review)
-    print('\n>>> Word tokenization:\n', review_data)
+    print('\n>>> Review:\n', review.text)
+    print('\n>>> Word tokenization:\n', review.words)
 
     # Analysis
     print('\n[Parsing the review]')
-    document_markup = word_tagger(liwc, ontology, review_data)
+    review.tag_words(liwc, ontology)
 
-    # Create a dictionary for polarties aspects
-    # print('\n[Compute the polarities]')
-    # compute_polarities(document_markup, 4)
-
-    # print_review_data(review_data, document_markup)
-
-    compute_sentence(review_data, document_markup)
-    print(aspect_pos)
+    review.compute_sentence()
+    review.print_data()
 
 
 if __name__ == '__main__':
