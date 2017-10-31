@@ -1,10 +1,12 @@
+"""
+Class and functions to analyse data contained in opinion documents.
+"""
+
 # Standart libraries
 import string
 
 # Third-party libraries
 import nltk
-import rdflib
-from rdflib.namespace import RDF, OWL
 
 # Download data for the tokenization process
 # nltk.download('punkt')
@@ -16,106 +18,6 @@ amplifier = ['mais', 'muito', 'demais', 'completamente', 'absolutamente',
              'totalmente', 'definitivamente', 'extremamente', 'frequentemente',
              'bastante']
 downtoner = ['pouco', 'quase', 'menos', 'apenas']
-
-
-class LIWC:
-    """
-    LIWC dictionary and data class.
-    """
-
-    def __init__(self, filename, remove_asterisk=True):
-        """Construct LIWC object and initilize the sentiment word dictionary."""
-
-        self.file = open(filename, 'r', encoding='latin-1')
-        self.data = self.file.readlines()
-        self.dict = dict()
-
-        # Iterate across the LIWC data
-        for line in self.data:
-            line_words = line.rstrip('\r\n').split()
-            word = line_words[0]
-            categories = line_words[1:]
-
-            # Remove asterisk notation from word if required
-            if remove_asterisk and word[-1] == '*':
-                word = word[:-1]
-
-            # Add word to it's corresponding emotion set
-            if '126' in categories:
-                # Store word as positive emotion
-                self.dict[word] = +1
-
-            elif '127' in categories:
-                # Store word as an negative emotion
-                self.dict[word] = -1
-
-    def get_sentiment(self, word):
-        """
-        Search a given word on the LIWC dictionary and return the polarity
-        associated to it ('-1'/'+1'), otherwise return None.
-        """
-
-        # List of word derivations to search for on dictionary
-        word_derivations = [word]
-
-        # Add to the list derivations of 'word' removing it's last letters
-        if len(word) > 2:
-            word_derivations.append(word[:-1])
-        if len(word) > 3:
-            word_derivations.append(word[:-2])
-
-        # Query the word derivations
-        for term in word_derivations:
-            polarity = self.dict.get(term)
-
-            # Polarity found (-1 or +1)
-            if polarity is not None:
-                return(polarity)
-
-        # No polarity value found on the dictionary
-        return(None)
-
-
-class Ontology:
-    """
-    OWL Ontology class.
-    """
-
-    def __init__(self, filename):
-        """Construct an Ontology object and create the corresponding RDFLIB graph."""
-        self.g = rdflib.Graph()
-        self.g.load(filename)
-
-    def search(self, search_term):
-        """
-        Search for an aspect or aspect's class that corresponds to the given term.
-        Returns the aspect or aspect's class in case of success. Otherwise, return 'None'.
-        """
-
-        search_term = search_term.lower()
-
-        # Search for every relation 'is a type of' between aspects and classes
-        for b in self.g.subject_objects(RDF.type):
-
-            # Check if the subject is a class
-            is_class = False
-            if (b[1] == OWL.Class): is_class = True
-
-            # Discard some nonrelevant objects
-            if b[1] != OWL.NamedIndividual and b[1] != OWL.Ontology:
-
-                # Extract subject as a lowercase string
-                sub = self.g.label(b[0]).toPython().lower()
-
-                # Select results that match the search
-                if sub == search_term:
-                    if is_class:
-                        return(sub)
-                    else:
-                        obj = self.g.label(b[1]).toPython().lower()
-                        return(obj)
-
-        return(None)
 
 
 class Document:
@@ -137,16 +39,6 @@ class Document:
 
         # Dictionary of informations about the aspect context
         self.aspect_context = dict()
-
-    def print_data(self):
-        """
-        Show on screen each document word and it's corresponding tag.
-        Used for debbuging the tagging method.
-        '"""
-
-        print(f'[ #] [Word]          [Tag]')
-        for i, word in enumerate(self.words):
-            print(f'[{i:{2}}] {word:{15}} {self.word_tag[i]}')
 
     def tag_words(self, liwc, ontology):
         """
@@ -186,7 +78,7 @@ class Document:
                     else:
                         self.word_tag.append(polarity)
 
-    def compute_sentence(self):
+    def compute_polarity(self):
         """
         Atribute polarity to aspects based on surround sentiment words context.
 
@@ -305,6 +197,16 @@ class Document:
 
         return(polarity)
 
+    def print_data(self):
+        """
+        Show on screen each document word and it's corresponding tag.
+        Used for debbuging the tagging method.
+        '"""
+
+        print(f'[ #] [Word]          [Tag]')
+        for i, word in enumerate(self.words):
+            print(f'[{i:{2}}] {word:{15}} {self.word_tag[i]}')
+
     def print_aspect_data(self):
         """
         Show polarities associated to each aspect in review, based on context
@@ -328,43 +230,3 @@ class Document:
                 print(f'   [Aspect]\t[Position]')
                 for s_pos in info[1:]:
                     print(f'   {self.words[s_pos]}  \t{s_pos}')
-
-
-def main():
-
-    # Create a LIWC dictionary
-    liwc = LIWC(filename='liwc_dictionaries/LIWC2007_Portugues_win.dic')
-
-    # Load ontology of aspects
-    ontology = Ontology('ontologies/smartphone_aspects.owl')
-
-    # Load corpus data
-    text = 'Ótimo celular, desempenho e design espetaculares, superou minhas expectativas. Outra coisa que se destaca bastante é a bateria, com uma grande duração. Os fones que acompanham o celular são provavelmente os melhores que eu já utilizei, com uma qualidade sonora e um isolamento fenomenais. A samsung realmente inovou neste celular'
-    text2 = 'Adorei o celular, design muito bonito e moderno. Apesar disso, a bateria não dura muito.'
-
-    # Create an Document object to contain all info about the review
-    review = Document(text2)
-
-    print('\n>>> Review:\n', review.text)
-    print('\n>>> Word tokenization:\n', review.words)
-
-    # Tag the review data using the dictionaries
-    review.tag_words(liwc, ontology)
-
-    # Parse the review to compute aspects polarities
-    review.compute_sentence()
-
-    # Show relevant data about the review
-
-    # Show the review words and the respective tags
-    review.print_data()
-
-    # Relevant information obtained from each aspect context
-    review.print_aspect_context()
-
-    # Polarities associated to each aspect in review (based on context)
-    review.print_aspect_data()
-
-
-if __name__ == '__main__':
-    main()
