@@ -72,7 +72,7 @@ class LIWC:
             if polarity is not None:
                 return(polarity)
 
-        # No polarity value was found on the dictionary
+        # No polarity value found on the dictionary
         return(None)
 
 
@@ -120,12 +120,7 @@ class Ontology:
 
 class Document:
     """
-    Attributes:
-    ----------
-    text:
-    words:
-    word_tag:
-
+    Document class containing all data about an opinion text.
     """
 
     def __init__(self, text):
@@ -134,8 +129,14 @@ class Document:
         self.words = nltk.word_tokenize(text.lower())
         self.word_tag = []
 
+        # Dictionary of aspects occurrences
         self.aspect_pos = dict()
+
+        # Dictionary of aspects polarity
         self.aspect_polarity = dict()
+
+        # Dictionary of informations about the aspect context
+        self.aspect_context = dict()
 
     def print_data(self):
         """
@@ -164,11 +165,12 @@ class Document:
 
             else:
                 # Search on the ontology for a matching aspect
-                asp_check = ontology.search(word)
+                aspect = ontology.search(word)
 
                 # Check if word is an aspect
-                if asp_check is not None:
-                    self.aspect_pos[pos] = asp_check         # Mark the aspect position
+                if aspect is not None:
+                    # Mark the aspect occurrence position
+                    self.aspect_pos[pos] = aspect
                     self.word_tag.append('aspect')
 
                 # Check if word is a sentiment word
@@ -185,6 +187,13 @@ class Document:
                         self.word_tag.append(polarity)
 
     def compute_sentence(self):
+        """
+        Atribute polarity to aspects based on surround sentiment words context.
+
+        Calculate the sentence limits in which the located aspects are, identify
+        related sentiment words and atribute polarity value to the aspects based
+        on the sentiments context.
+        """
 
         punctuation = list(string.punctuation)
 
@@ -198,23 +207,127 @@ class Document:
             while(start > 0 and self.words[start - 1] not in punctuation):
                 start -= 1
                 if self.word_tag[start] == -1 or self.word_tag[start] == 1:
-                    # print('start: ', self.words[start])
                     sentiment_pos.append(start)
 
             # Set sentence end
             while(end < len(self.words) - 1 and self.words[end + 1] not in punctuation):
                 end += 1
                 if self.word_tag[end] == -1 or self.word_tag[end] == 1:
-                    # print('end:', self.word_tag[end])
                     sentiment_pos.append(end)
 
-            print(f'\nSentence for \'{self.aspect_pos.get(pos)}\': [{start},{end}]')
-            print(f'Sentiment words ({len(sentiment_pos)}):')
-            for s_pos in sentiment_pos:
-                print(f'\'{self.words[s_pos]}\' at {s_pos}')
+            # Store aspect sentence range
+            self.aspect_context.setdefault(pos, []).append((start, end))
 
+            # Get aspect's name
+            aspect = self.aspect_pos.get(pos)
+
+            # Compute the polarity for each sentiment word around the aspect
             for s_pos in sentiment_pos:
-                polarity = self.word_tag[s_pos]
+
+                # Store sentiment word
+                self.aspect_context.setdefault(pos, []).append(s_pos)
+
+                # Compute the polarity for the sentiment word context
+                context_polarity = self._get_context_polarity(s_pos)
+
+                # Sum the context polarity with any previous one for the current aspect
+                self.aspect_polarity[aspect] = self.aspect_polarity.get(aspect, 0) + context_polarity
+
+            # In case there's no sentiment word around the aspect
+            if len(sentiment_pos) == 0:
+                self.aspect_polarity[aspect] = 0
+
+    def _get_context_polarity(self, pos, word_range=4):
+        """
+        Compute the context information around a sentiment word, given it's
+        position 'pos' and a range 'word_range' to lookup for.
+
+        Return the sentiment word polarity based on the given word range.
+        """
+        punctuation = list(string.punctuation)
+
+        reached_start = False
+        reached_end = False
+
+        f_amplifier = False
+        f_downtoner = False
+        f_negation = False
+
+        # For each word inside 'word_range' around the sentiment
+        for i in range(1, word_range + 1):
+
+            # Mark valid
+            if pos - i >= 0 and pos + i < len(self.words):
+
+                # Stop search if a punctuation mark found
+                if not reached_start and self.words[pos - i] in punctuation:
+                    reached_start = True
+                if not reached_end and self.words[pos + i] in punctuation:
+                    reached_end = True
+
+                # Otherwise include word in context
+                if not reached_start:
+                    if self.word_tag[pos - i] == 'amplifier': f_amplifier = True
+                    elif self.word_tag[pos - i] == 'downtoner': f_downtoner = True
+                    elif self.word_tag[pos - i] == 'negation': f_negation = True
+                if not reached_end:
+                    if self.word_tag[pos + i] == 'amplifier': f_amplifier = True
+                    elif self.word_tag[pos + i] == 'downtoner': f_downtoner = True
+                    elif self.word_tag[pos + i] == 'negation': f_negation = True
+
+        # Get the sentiment word polarity based on context
+        polarity = self._get_sentiment_polarity(pos, f_amplifier, f_downtoner, f_negation)
+
+        return(polarity)
+
+    def _get_sentiment_polarity(self, pos, f_amplifier, f_downtoner, f_negation):
+        """
+        Return the sentiment word polarity given the word position 'pos' and
+        information about the context.
+        """
+
+        # Set a priori polarity
+        polarity = self.word_tag[pos]
+
+        # Algorith to calculate the overall sentiment
+        if f_amplifier:
+            if f_negation:
+                polarity = polarity / 3
+            else:
+                polarity = polarity * 3
+        elif f_downtoner:
+            if f_negation:
+                polarity = polarity * 3
+            else:
+                polarity = polarity / 3
+        elif f_negation:
+            polarity = -1 * polarity
+
+        return(polarity)
+
+    def print_aspect_data(self):
+        """
+        Show polarities associated to each aspect in review, based on context
+        """
+
+        print(f'[Aspect] \t[Overall polarity]')
+        for key, item in self.aspect_polarity.items():
+            print(f'\'{key}\' \t{item}')
+
+    def print_aspect_context(self):
+        """
+        Show information about known aspect, respective context range, and associated
+        sentiment words with it's positions.
+        """
+
+        for pos, info in self.aspect_context.items():
+            print(f'\nFound ({self.aspect_pos.get(pos)}) as ({self.words[pos]}). Context {info[0]}')
+            if len(info) == 1:
+                print('   No sentiment word found.')
+            else:
+                print(f'   [Aspect]\t[Position]')
+                for s_pos in info[1:]:
+                    print(f'   {self.words[s_pos]}  \t{s_pos}')
 
 
 def main():
@@ -227,19 +340,30 @@ def main():
 
     # Load corpus data
     text = 'Ótimo celular, desempenho e design espetaculares, superou minhas expectativas. Outra coisa que se destaca bastante é a bateria, com uma grande duração. Os fones que acompanham o celular são provavelmente os melhores que eu já utilizei, com uma qualidade sonora e um isolamento fenomenais. A samsung realmente inovou neste celular'
+    text2 = 'Adorei o celular, design muito bonito e moderno. Apesar disso, a bateria não dura muito.'
 
     # Create an Document object to contain all info about the review
-    review = Document(text)
+    review = Document(text2)
 
     print('\n>>> Review:\n', review.text)
     print('\n>>> Word tokenization:\n', review.words)
 
-    # Analysis
-    print('\n[Parsing the review]')
+    # Tag the review data using the dictionaries
     review.tag_words(liwc, ontology)
 
+    # Parse the review to compute aspects polarities
     review.compute_sentence()
+
+    # Show relevant data about the review
+
+    # Show the review words and the respective tags
     review.print_data()
+
+    # Relevant information obtained from each aspect context
+    review.print_aspect_context()
+
+    # Polarities associated to each aspect in review (based on context)
+    review.print_aspect_data()
 
 
 if __name__ == '__main__':
