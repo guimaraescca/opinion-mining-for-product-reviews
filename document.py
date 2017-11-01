@@ -127,7 +127,7 @@ class Document:
 
             # In case there's no sentiment word around the aspect
             if len(sentiment_pos) == 0:
-                self.aspect_polarity[aspect] = 0
+                self.aspect_polarity[aspect] = self.aspect_polarity.get(aspect, 0) + 0
 
     def _get_context_polarity(self, pos, word_range=4):
         """
@@ -203,7 +203,7 @@ class Document:
         Used for debbuging the tagging method.
         '"""
 
-        print(f'[ #] [Word]          [Tag]')
+        print(f'\n[ #] [Word]          [Tag]')
         for i, word in enumerate(self.words):
             print(f'[{i:{2}}] {word:{15}} {self.word_tag[i]}')
 
@@ -212,9 +212,9 @@ class Document:
         Show polarities associated to each aspect in review, based on context
         """
 
-        print(f'[Aspect] \t[Overall polarity]')
+        print(f'\n[Aspect]               [Overall polarity]')
         for key, item in self.aspect_polarity.items():
-            print(f'\'{key}\' \t{item}')
+            print(f'{key:{22}} {item}')
 
     def print_aspect_context(self):
         """
@@ -225,8 +225,8 @@ class Document:
         for pos, info in self.aspect_context.items():
             print(f'\nFound ({self.aspect_pos.get(pos)}) as ({self.words[pos]}). Context {info[0]}')
             if len(info) == 1:
-                print('   No sentiment word found.')
+                print('   Nothing found.')
             else:
-                print(f'   [Aspect]\t[Position]')
+                print(f'   [Aspect]            [Polarity] [Position]')
                 for s_pos in info[1:]:
-                    print(f'   {self.words[s_pos]}  \t{s_pos}')
+                    print(f'   {self.words[s_pos]:{15}} {self.word_tag[s_pos]:{5}} {s_pos:{12}}')

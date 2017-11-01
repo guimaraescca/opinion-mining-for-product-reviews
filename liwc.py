@@ -11,8 +11,8 @@ class LIWC:
     def __init__(self, filename, remove_asterisk=True):
         """Construct LIWC object and initilize the sentiment word dictionary."""
 
-        self.file = open(filename, 'r', encoding='latin-1')
-        self.data = self.file.readlines()
+        liwc_file = open(filename, 'r', encoding='latin-1')
+        self.data = liwc_file.readlines()
         self.dict = dict()
 
         # Iterate across the LIWC data
@@ -33,6 +33,8 @@ class LIWC:
             elif '127' in categories:
                 # Store word as an negative emotion
                 self.dict[word] = -1
+
+        liwc_file.close()
 
     def get_sentiment(self, word):
         """
