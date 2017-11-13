@@ -25,9 +25,10 @@ class Document:
     Document class containing all data about an opinion text.
     """
 
-    def __init__(self, text):
+    def __init__(self, text, date):
 
         self.text = text
+        self.date = date
         self.words = nltk.word_tokenize(text.lower())
         self.word_tag = []
 
