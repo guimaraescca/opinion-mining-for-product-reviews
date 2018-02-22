@@ -1,10 +1,29 @@
 # Standart libraries
+import os
+import glob
 import subprocess
+
+# Third-party libraries
+import pandas as pd
+import numpy as np
 
 # Local files
 from liwc import LIWC
 from ontology import Ontology
 from document import Document
+
+corpus_polarity = dict()
+df_corpus_pol = pd.DataFrame()
+
+
+def compute_total(review_polarities):
+
+    for aspect, polarity in review_polarities.items():
+
+        if polarity >= 0:
+            corpus_polarity[aspect] = corpus_polarity.get(aspect, np.zeros((1, 2))) + np.array((1, 0))
+        else:
+            corpus_polarity[aspect] = corpus_polarity.get(aspect, np.zeros((1, 2))) + np.array((0, 1))
 
 
 def main():
@@ -15,21 +34,23 @@ def main():
     # Load ontology of aspects
     ontology = Ontology('ontologies/smartphone_aspects.owl')
 
-    # Load corpus data
-    text = 'Ótimo celular, desempenho e design espetaculares, superou minhas expectativas. Outra coisa que se destaca bastante é a bateria, com uma grande duração. Os fones que acompanham o celular são provavelmente os melhores que eu já utilizei, com uma qualidade sonora e um isolamento fenomenais. A samsung realmente inovou neste celular'
-    text2 = 'Adorei o celular, design muito bonito e moderno. Apesar disso, a bateria não dura muito.'
-
     # Apply the UGCNormal Normalizer to the corpus
-    subprocess.call(['UGCNormal/ugc_norm.sh', 'corpus/', 'corpus-normalized/'])
+    # subprocess.call(['UGCNormal/ugc_norm.sh', 'corpus/', 'corpus-normalized/'])
 
     # Create an Document object to contain all info about the review
-    filename = 'corpus-normalized/tok/checked/siglas/internetes/nomes/rev.txt'
+    filename = 'corpus-normalized/tok/checked/siglas/internetes/nomes/review-2017-1.txt'
 
     review_file = open(filename, 'r')
     review_data = review_file.read().replace('\n', ' . ')
     review_file.close()
 
-    review = Document(review_data)
+    # Load corpus data
+    text = 'Ótimo celular, desempenho e design espetaculares, superou minhas expectativas. Outra coisa que se destaca bastante é a bateria, com uma grande duração. Os fones que acompanham o celular são provavelmente os melhores que eu já utilizei, com uma qualidade sonora e um isolamento fenomenais. A samsung realmente inovou neste celular'
+    text2 = 'Adorei o celular, design muito bonito e moderno. Apesar disso, a bateria não dura muito.'
+
+    review_data = text2
+
+    review = Document(review_data, 2000)
 
     print('\n>>> Review:\n', review.text)
     print('\n>>> Word tokenization:\n', review.words)
