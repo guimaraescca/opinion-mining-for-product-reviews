@@ -1,10 +1,12 @@
 """
-Class and functions to query data from OWL Ontologies.
+Class and functions to query terms from OWL Ontologies.
 """
 
 # Third party libraries
+import pandas as pd
 import rdflib
-from rdflib.namespace import RDF, OWL
+import rdflib.plugins.sparql as sparql
+from rdflib.namespace import RDF, RDFS, OWL
 
 
 class Ontology:
@@ -19,31 +21,47 @@ class Ontology:
 
     def search(self, search_term):
         """
-        Search for an aspect or aspect's class that corresponds to the given term.
-        Returns the aspect or aspect's class in case of success. Otherwise, return 'None'.
+        Search for an aspect that corresponds to the given term.
+        Returns the aspect's class in case of success. Otherwise, returns 'None'.
         """
 
         search_term = search_term.lower()
 
-        # Search for every relation 'is a type of' between aspects and classes
-        for b in self.g.subject_objects(RDF.type):
+        # Especifies the query syntax
+        query = sparql.prepareQuery("""
+                    SELECT DISTINCT ?individualLabel ?classLabel
+                    WHERE {
+                        ?y rdf:type owl:Class .
+                        ?y rdfs:label ?classLabel .
+                        OPTIONAL {
+                            ?x rdf:type ?y .
+                            ?x rdfs:label ?individualLabel .
+                        }
+                        FILTER( REGEX(str(?individualLabel), "^%s([_]|$)|([_]|^)%s$", "i") ||
+                                REGEX(str(?classLabel), "^%s([_]|$)|([_]|^)%s$", "i"))
+                    }
+                    ORDER BY ASC(?classLabel)""" % (search_term, search_term, search_term, search_term),
+                    initNs={'rdf': RDF, 'rdfs': RDFS, 'owl': OWL})
 
-            # Check if the subject is a class
-            is_class = False
-            if (b[1] == OWL.Class): is_class = True
+        # Perform the query through the ontology
+        query_result = self.g.query(query, DEBUG=True)
 
-            # Discard some nonrelevant objects
-            if b[1] != OWL.NamedIndividual and b[1] != OWL.Ontology:
+        # Transform the query results to a Pandas DataFrame format
+        data = []
+        for row in query_result:
+            data_row = []
+            for x in row:
+                if x is not None:
+                    x = x.toPython()
+                data_row.append(x)
+            data.append(data_row)
 
-                # Extract subject as a lowercase string
-                sub = self.g.label(b[0]).toPython().lower()
+        df = pd.DataFrame(data, columns=['individualLabel', 'classLabel'])
 
-                # Select results that match the search
-                if sub == search_term:
-                    if is_class:
-                        return(sub)
-                    else:
-                        obj = self.g.label(b[1]).toPython().lower()
-                        return(obj)
+        # Retrives the first class listed on the DataFrame, in case it exists
+        try:
+            result_class = df.loc[0, 'classLabel']
+        except KeyError:
+            result_class = None
 
-        return(None)
+        return(result_class)
