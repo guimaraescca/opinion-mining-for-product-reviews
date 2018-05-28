@@ -6,7 +6,9 @@ import subprocess
 import pandas as pd
 import pickle
 
-from src.document import Document
+from document import Document
+
+PROJ_ROOT = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir))
 
 
 def load_corpus(corpus_path):
@@ -52,7 +54,8 @@ def load_pickle_object(filename, class_name, class_args):
         with open(filename, 'rb') as f:
             loaded_object = pickle.load(f)
 
-    except (OSError, IOError) as e:
+    # except (OSError, IOError) as e:
+    except Exception as e:
         loaded_object = class_name(*class_args)
         with open(filename, 'wb') as f:
             pickle.dump(loaded_object, f)
@@ -79,12 +82,12 @@ def sheet_to_file(sheet_file):
 
     # Create corpus year folders
     for i in range(0, 5):
-        folder_name = '../data/processed/corpus/original/{}'.format(2013 + i)
+        folder_name = os.path.join(PROJ_ROOT, 'data/processed/corpus/original/{}'.format(2013 + i))
         pathlib.Path(folder_name).mkdir(parents=True, exist_ok=True)
 
     # For every review in the Dataframe create a new file
     for i, row in enumerate(df_piloto.itertuples(index=True)):
-        filename = '../data/processed/corpus/original/{}/review-{}-{}.txt'.format(row[0], row[0], i % 10)
+        filename = os.path.join(PROJ_ROOT, 'data/processed/corpus/original/{}/review-{}-{}.txt'.format(row[0], row[0], i % 10))
         with open(filename, 'w') as review_file:
             review_file.write(row[5])
 

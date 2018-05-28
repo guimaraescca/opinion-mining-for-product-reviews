@@ -1,77 +1,70 @@
 # Standart libraries
 import os
-import glob
-import subprocess
 
 # Third-party libraries
 import pandas as pd
-import numpy as np
 
 # Local files
+import utils
 from liwc import LIWC
 from ontology import Ontology
-from document import Document
 
-corpus_polarity = dict()
-df_corpus_pol = pd.DataFrame()
-
-
-def compute_total(review_polarities):
-
-    for aspect, polarity in review_polarities.items():
-
-        if polarity >= 0:
-            corpus_polarity[aspect] = corpus_polarity.get(aspect, np.zeros((1, 2))) + np.array((1, 0))
-        else:
-            corpus_polarity[aspect] = corpus_polarity.get(aspect, np.zeros((1, 2))) + np.array((0, 1))
+PROJ_ROOT = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir))
 
 
 def main():
 
-    # Create a LIWC dictionary
-    liwc = LIWC(filename='liwc_dictionaries/LIWC2007_Portugues_win.dic')
+    # Load LIWC dictionary
+    liwc = utils.load_pickle_object(filename=os.path.join(PROJ_ROOT, 'data/interim/liwc-object.pickle'),
+                                    class_name=LIWC,
+                                    class_args=[os.path.join(PROJ_ROOT, 'data/external/liwc/LIWC2007_Portugues_win.dic')])
 
     # Load ontology of aspects
-    ontology = Ontology('ontologies/smartphone_aspects.owl')
+    ontology = Ontology(os.path.join(PROJ_ROOT, 'data/external/ontologies/smartphone_aspects.owl'))
 
     # Apply the UGCNormal Normalizer to the corpus
-    # subprocess.call(['UGCNormal/ugc_norm.sh', 'corpus/', 'corpus-normalized/'])
+#     utils.sheet_to_file(os.path.join(PROJ_ROOT, 'data/raw/pilot-study-reviews.xlsx'))
+#     utils.normalize_corpus(os.path.join(PROJ_ROOT, 'data/processed/corpus/original/'), os.path.join(PROJ_ROOT, 'data/processed/corpus/normalized/'))
 
-    # Create an Document object to contain all info about the review
-    filename = 'corpus-normalized/tok/checked/siglas/internetes/nomes/review-2017-1.txt'
+    # Read the corpus data
+    corpus = utils.load_corpus(os.path.join(PROJ_ROOT, 'data/processed/corpus/normalized/tok/checked/siglas/internetes/nomes/'))
 
-    review_file = open(filename, 'r')
-    review_data = review_file.read().replace('\n', ' . ')
-    review_file.close()
+    # Create a Pandas DataFrame to hold the polarity count data
+    df_corpus = pd.DataFrame(columns=['Aspect', 'Year', 'Positive', 'Negative'])
 
-    # Load corpus data
-    text = 'Ótimo celular, desempenho e design espetaculares, superou minhas expectativas. Outra coisa que se destaca bastante é a bateria, com uma grande duração. Os fones que acompanham o celular são provavelmente os melhores que eu já utilizei, com uma qualidade sonora e um isolamento fenomenais. A samsung realmente inovou neste celular'
-    text2 = 'Adorei o celular, design muito bonito e moderno. Apesar disso, a bateria não dura muito.'
+    # Corpus analysis
+    for i, review in enumerate(corpus):
+        if i >= 2:
+            return
+        print(f'\nReview #{i}\n {review.text}.')
 
-    review_data = text2
+        # Tag the review data using the dictionaries
+        review.tag_words(liwc, ontology)
 
-    review = Document(review_data, 2000)
+        # Parse the review to compute aspects polarities
+        review.compute_polarity()
 
-    print('\n>>> Review:\n', review.text)
-    print('\n>>> Word tokenization:\n', review.words)
+        # Show polarities associated to each aspect in review (based on context)
+        review.print_aspect_data()
+        review.print_aspect_context()
 
-    # Tag the review data using the dictionaries
-    review.tag_words(liwc, ontology)
+        # Use review data to update the corpus count
+        df_corpus = utils.update_polarity_count(df_corpus, review.aspect_polarity, review.date)
 
-    # Parse the review to compute aspects polarities
-    review.compute_polarity()
+    # Compute the total number of occurrences on the DataFrame
+    df_corpus['Occurrences'] = df_corpus[['Positive', 'Negative']].sum(axis=1)
 
-    # Show relevant data about the review
+    # Create new DataFrame couning aspect's overall occurrences
+    df_overall = df_corpus.groupby(['Aspect'])[['Occurrences']].sum().sort_values('Occurrences', ascending=False)
 
-    # Show the review words and the respective tags
-    review.print_data()
+    # Normalize the positive and negative count
+    df_corpus[['Positive', 'Negative']] = 100 * df_corpus[['Positive', 'Negative']].div(df_corpus['Occurrences'], axis=0)
 
-    # Relevant information obtained from each aspect context
-    review.print_aspect_context()
+    # Set the aspect's column as the index
+    # df_corpus_pol = df_corpus_pol.set_index('Aspect')
 
-    # Polarities associated to each aspect in review (based on context)
-    review.print_aspect_data()
+    return(df_corpus, df_overall)
 
 
 if __name__ == '__main__':
-    main()
+    df_corpus, df_overall = main()
