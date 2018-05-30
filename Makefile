@@ -7,4 +7,4 @@ help:
 	@echo "	Remove temporary data stored at data/interim"
 
 clean:
-	rm -f -r data/interim/*
+	rm data/interim/liwc-object.pickle

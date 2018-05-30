@@ -10,7 +10,7 @@ import nltk
 from nltk.tokenize import MWETokenizer
 
 # Download data for the tokenization process
-# nltk.download('punkt')
+nltk.download('punkt')
 
 # Context words for polarity change
 negation = set(['jamais', 'nada', 'nem', 'nenhum', 'ninguém', 'nunca', 'não',
