@@ -6,26 +6,32 @@ import subprocess
 import pandas as pd
 import pickle
 
+import ontology
 from document import Document
 
 PROJ_ROOT = os.path.abspath(os.path.join(__file__, os.pardir, os.pardir))
 
 
-def load_corpus(corpus_path):
+def load_corpus(corpus_path, onto):
+    """
+    Create a list of Document objects representing the files in the corpus.
+    """
 
     corpus = []
+
+    mwaspects = ontology.get_multi_word_aspects(onto)
 
     # Load all review files inside de corpus folder
     for filename in glob.glob(os.path.join(corpus_path, '*.txt')):
 
         review_year = int(os.path.basename(filename)[7:11])
         review_code = int(os.path.basename(filename)[12:13])
-        review_file = open(filename, 'r')
-        review_data = review_file.read().replace('\n', '.')
-        review_file.close()
+
+        with open(filename, 'r') as review_file:
+            review_data = review_file.read().replace('\n', '.')
 
         # Create a list of Document objects containing each review
-        review = Document(review_data, review_year)
+        review = Document(review_data, review_year, mwaspects)
         corpus.append(review)
 
     return(corpus)

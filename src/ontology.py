@@ -65,3 +65,71 @@ class Ontology:
             result_class = None
 
         return(result_class)
+
+
+def ontology_to_dict(filename):
+    """
+    Create a dictionary of aspects based on a given ontology.
+
+    The returned dict has keys representing aspects and values corresponding to the closest
+    cluster on the ontology.
+    """
+
+    g = rdflib.Graph()
+    g.load(filename)
+
+    query_classes = sparql.prepareQuery("""
+            SELECT DISTINCT ?classLabel
+            WHERE {
+                ?y rdf:type owl:Class .
+                ?y rdfs:label ?classLabel .
+            }
+            ORDER BY ASC(?classLabel)""",
+            initNs={'rdf': RDF, 'rdfs': RDFS, 'owl': OWL})
+
+    query_individuals = sparql.prepareQuery("""
+            SELECT DISTINCT ?individualLabel ?classLabel
+            WHERE {
+                ?y rdf:type owl:Class .
+                ?y rdfs:label ?classLabel .
+                ?x rdf:type ?y .
+                ?x rdfs:label ?individualLabel .
+            }
+            ORDER BY ASC(?classLabel)""",
+            initNs={'rdf': RDF, 'rdfs': RDFS, 'owl': OWL})
+
+    onto_dict = dict()
+
+    # Process classes
+    query_result = g.query(query_classes, DEBUG=True)
+    for row in query_result:
+        for x in row:
+            aspect_class = x.toPython().replace('_', ' ').lower()
+            onto_dict[aspect_class] = aspect_class
+
+    # Process individuals
+    query_result = g.query(query_individuals, DEBUG=True)
+    for row in query_result:
+        data_row = []
+        for x in row:
+            aspect = x.toPython().replace('_', ' ').lower()
+            data_row.append(aspect)
+
+        if data_row[0] not in onto_dict:
+            onto_dict[data_row[0]] = data_row[1]
+
+    return(onto_dict)
+
+
+def get_multi_word_aspects(dictionary):
+    """
+    Return a list of tuples containing only the multi-word aspects in ontology.
+    """
+
+    aspect_list = []
+    for key in dictionary.keys():
+        aspect = key.split(' ')
+        if len(aspect) >= 2:
+            aspect_list.append(tuple(aspect))
+
+    return(aspect_list)

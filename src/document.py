@@ -7,17 +7,18 @@ import string
 
 # Third-party libraries
 import nltk
+from nltk.tokenize import MWETokenizer
 
 # Download data for the tokenization process
-nltk.download('punkt')
+# nltk.download('punkt')
 
 # Context words for polarity change
-negation = ['jamais', 'nada', 'nem', 'nenhum', 'ninguém', 'nunca', 'não',
-            'tampouco']
-amplifier = ['mais', 'muito', 'demais', 'completamente', 'absolutamente',
-             'totalmente', 'definitivamente', 'extremamente', 'frequentemente',
-             'bastante']
-downtoner = ['pouco', 'quase', 'menos', 'apenas']
+negation = set(['jamais', 'nada', 'nem', 'nenhum', 'ninguém', 'nunca', 'não',
+                'tampouco'])
+amplifier = set(['mais', 'muito', 'demais', 'completamente', 'absolutamente',
+                 'totalmente', 'definitivamente', 'extremamente',
+                 'frequentemente', 'bastante'])
+downtoner = set(['pouco', 'quase', 'menos', 'apenas'])
 
 
 class Document:
@@ -25,11 +26,13 @@ class Document:
     Document class containing all data about an opinion text.
     """
 
-    def __init__(self, text, date):
+    def __init__(self, text, date, mwaspects):
 
         self.text = text
         self.date = date
-        self.words = nltk.word_tokenize(text.lower())
+        tokens = nltk.word_tokenize(text.lower())
+        mwtokenizer = MWETokenizer(mwaspects, separator=' ')
+        self.words = mwtokenizer.tokenize(tokens)
         self.word_tag = []
 
         # Dictionary of aspects occurrences
@@ -57,11 +60,10 @@ class Document:
                 self.word_tag.append('downtoner')
 
             else:
-                # Search on the ontology for a matching aspect
-                aspect = ontology.search(word)
-
                 # Check if word is an aspect
-                if aspect is not None:
+                if word in ontology:
+                    aspect = ontology[word]
+
                     # Mark the aspect occurrence position
                     self.aspect_pos[pos] = aspect
                     self.word_tag.append('aspect')
