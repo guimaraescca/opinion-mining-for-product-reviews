@@ -1,4 +1,4 @@
-nltk==3.3
+nltk==3.4
 rdflib==4.2.2
-pandas==0.22.0
-numpy==1.14.3
+pandas==0.24.0
+plotly==2.7.0
