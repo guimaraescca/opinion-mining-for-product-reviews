@@ -14,7 +14,7 @@ This is part of a research project developed at ICMC-USP.
   - `/processed` stores the corpus data processed after the normalization by the [UGCNormal](https://github.com/avanco/UGCNormal/).
   - `/interim` stores temporary files (models, etc).
   - `/external` stores data acquired from external sources.
-    - `/liwc` contains the [LIWC dictionary](http://www.nilc.icmc.usp.br/nilc/index.php/tools-and-resources) for the Brazilian Portuguese language developed by researchers at [NILC/ICMC](www.nilc.icmc.usp.br/).
+    - `/liwc` contains the [LIWC dictionary](http://www.nilc.icmc.usp.br/nilc/index.php/tools-and-resources) for the Brazilian Portuguese language developed by researchers at [NILC/ICMC](http://www.nilc.icmc.usp.br/).
     - `/ontologies` contains resources made available by [@francielleavargas](https://github.com/francielleavargas) with [aspect hierarchies for different product domains](https://github.com/francielleavargas/Aspect-based-Opinion-Mining).
 
 ## Installation
